@@ -54,6 +54,9 @@ fluxmq:
 ```java
 @Service
 public final class OrderService {
+  private static final FluxMqTopic<OrderCreated> ORDERS_CREATED =
+      FluxMqTopic.of("orders.created", OrderCreated.class);
+
   private final FluxMqPublisher publisher;
 
   public OrderService(FluxMqPublisher publisher) {
@@ -61,7 +64,7 @@ public final class OrderService {
   }
 
   public void createOrder(UUID orderId) {
-    publisher.publish("orders.created", new OrderCreated(orderId));
+    publisher.publish(ORDERS_CREATED, new OrderCreated(orderId));
   }
 }
 ```
@@ -149,9 +152,13 @@ Design handlers to be idempotent when publishing meaningful business events.
 
 ## Recommended Use Cases
 
-- Lightweight local or service-to-service notifications.
-- Internal best-effort events where occasional loss is acceptable.
-- Prototypes and applications that already want ZeroMQ semantics.
+- Production cache invalidation and refresh hints.
+- Control-plane broadcasts where the latest state matters most.
+- Live dashboards, status streams, and edge telemetry where gaps are acceptable.
+- Lightweight service-to-service notifications inside trusted networks.
+
+See [FluxMQ Use Cases](docs/use-cases.md) for concrete scenarios and
+[Production Readiness](docs/production-readiness.md) for operational guidance.
 
 ## Non-Recommended Use Cases
 

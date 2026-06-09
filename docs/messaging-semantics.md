@@ -6,6 +6,13 @@ FluxMQ uses ZeroMQ PUB/SUB through JeroMQ. Delivery is best-effort and in-memory
 multipart message with topic, envelope metadata JSON, and payload bytes. A subscriber dispatches the
 message to listeners registered for the exact topic.
 
+## Topic Payload Contracts
+
+Applications can publish through `FluxMqTopic<T>` to keep a topic name paired with the payload type
+at compile time. This is a caller-side API contract; the wire message still carries the topic name,
+envelope metadata, and payload bytes, and listeners still deserialize into the type declared by the
+listener method parameter.
+
 ## Ordering Assumptions
 
 Messages sent by one publisher socket to one subscriber socket are observed in socket order when

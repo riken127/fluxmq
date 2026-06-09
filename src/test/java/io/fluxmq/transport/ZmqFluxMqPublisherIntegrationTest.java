@@ -1,11 +1,13 @@
 package io.fluxmq.transport;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.fluxmq.FluxMqEnvelope;
 import io.fluxmq.FluxMqObservationHandler;
+import io.fluxmq.FluxMqSerializer;
 import io.fluxmq.autoconfigure.FluxMqProperties.EndpointMode;
 import io.fluxmq.autoconfigure.FluxMqProperties.ResolvedEndpoint;
 import io.fluxmq.serialization.FluxMqEnvelopeCodec;
@@ -80,5 +82,91 @@ final class ZmqFluxMqPublisherIntegrationTest {
     }
   }
 
+  @Test
+  void reportsSerializationFailureWithoutSendingMessage() {
+    ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    FluxMqEnvelopeCodec codec = new FluxMqEnvelopeCodec(objectMapper);
+    AtomicReference<String> failedTopic = new AtomicReference<>();
+    AtomicReference<Throwable> failedError = new AtomicReference<>();
+
+    try (ZContext context = new ZContext();
+        ZMQ.Socket subscriber = context.createSocket(SocketType.SUB);
+        ZmqFluxMqPublisher publisher =
+            new ZmqFluxMqPublisher(
+                context,
+                new ResolvedEndpoint(EndpointMode.CONNECT, "inproc://publisher-serialization"),
+                new ThrowingSerializer(),
+                codec,
+                Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC),
+                new FluxMqObservationHandler() {
+                  @Override
+                  public void publishFailed(String topic, Throwable error, Duration duration) {
+                    failedTopic.set(topic);
+                    failedError.set(error);
+                  }
+                },
+                16,
+                Duration.ofSeconds(1),
+                Duration.ofSeconds(1))) {
+      subscriber.bind("inproc://publisher-serialization");
+      subscriber.subscribe("orders.created".getBytes(StandardCharsets.UTF_8));
+      subscriber.setReceiveTimeOut(200);
+
+      assertThatThrownBy(() -> publisher.publish("orders.created", new OrderCreated("order-1")))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessage("cannot serialize");
+
+      assertThat(failedTopic).hasValue("orders.created");
+      assertThat(failedError.get()).isInstanceOf(IllegalStateException.class);
+      assertThat(subscriber.recv(0)).isNull();
+    }
+  }
+
+  @Test
+  void rejectsPublishAfterCloseAndReportsFailure() {
+    ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    FluxMqEnvelopeCodec codec = new FluxMqEnvelopeCodec(objectMapper);
+    AtomicReference<String> failedTopic = new AtomicReference<>();
+
+    try (ZContext context = new ZContext()) {
+      ZmqFluxMqPublisher publisher =
+          new ZmqFluxMqPublisher(
+              context,
+              new ResolvedEndpoint(EndpointMode.BIND, "inproc://publisher-closed"),
+              new JacksonFluxMqSerializer(objectMapper),
+              codec,
+              Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC),
+              new FluxMqObservationHandler() {
+                @Override
+                public void publishFailed(String topic, Throwable error, Duration duration) {
+                  failedTopic.set(topic);
+                }
+              },
+              16,
+              Duration.ofSeconds(1),
+              Duration.ofMillis(200));
+
+      publisher.close();
+
+      assertThatThrownBy(() -> publisher.publish("orders.created", new OrderCreated("order-1")))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessage("FluxMQ publisher is closed");
+      assertThat(failedTopic).hasValue("orders.created");
+    }
+  }
+
   record OrderCreated(String id) {}
+
+  private static final class ThrowingSerializer implements FluxMqSerializer {
+
+    @Override
+    public byte[] serialize(Object payload) {
+      throw new IllegalStateException("cannot serialize");
+    }
+
+    @Override
+    public <T> T deserialize(byte[] payload, Class<T> type) {
+      throw new UnsupportedOperationException();
+    }
+  }
 }

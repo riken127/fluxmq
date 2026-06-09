@@ -31,19 +31,35 @@ final class ZmqFluxMqSubscriberContainerIntegrationTest {
     Listener listenerBean = new Listener();
     FluxMqListenerRegistry registry = registryFor(listenerBean, "handle");
     FluxMqProperties properties = subscriberProperties("inproc://subscriber-dispatch");
+    AtomicReference<String> succeededListener = new AtomicReference<>();
+    FluxMqObservationHandler observationHandler =
+        new FluxMqObservationHandler() {
+          @Override
+          public void listenerSucceeded(
+              FluxMqEnvelope envelope, String listener, int attempt, java.time.Duration duration) {
+            succeededListener.set(listener);
+          }
+        };
 
     try (ZContext context = new ZContext();
         ZMQ.Socket publisher = context.createSocket(SocketType.PUB)) {
       publisher.bind("inproc://subscriber-dispatch");
       ZmqFluxMqSubscriberContainer container =
           new ZmqFluxMqSubscriberContainer(
-              context, properties, registry, serializer, codec, (error, envelope) -> {});
+              context,
+              properties,
+              registry,
+              serializer,
+              codec,
+              (error, envelope) -> {},
+              observationHandler);
       container.start();
       Thread.sleep(150);
 
       send(publisher, codec, serializer, "orders.created", new OrderCreated("order-1"));
 
       assertThat(await(listenerBean.received)).isEqualTo(new OrderCreated("order-1"));
+      assertThat(await(succeededListener)).endsWith("#handle");
       container.stop();
       assertThat(container.isRunning()).isFalse();
     }
@@ -92,6 +108,62 @@ final class ZmqFluxMqSubscriberContainerIntegrationTest {
     }
   }
 
+  @Test
+  void deserializationFailureIsReportedAndReceiveLoopContinues() throws Exception {
+    ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    FluxMqEnvelopeCodec codec = new FluxMqEnvelopeCodec(objectMapper);
+    JacksonFluxMqSerializer serializer = new JacksonFluxMqSerializer(objectMapper);
+    Listener listenerBean = new Listener();
+    FluxMqListenerRegistry registry = registryFor(listenerBean, "handle");
+    FluxMqProperties properties = subscriberProperties("inproc://subscriber-bad-payload");
+    AtomicReference<String> failedTopic = new AtomicReference<>();
+    FluxMqErrorHandler errorHandler = (error, envelope) -> failedTopic.set(envelope.topic());
+
+    try (ZContext context = new ZContext();
+        ZMQ.Socket publisher = context.createSocket(SocketType.PUB)) {
+      publisher.bind("inproc://subscriber-bad-payload");
+      ZmqFluxMqSubscriberContainer container =
+          new ZmqFluxMqSubscriberContainer(
+              context, properties, registry, serializer, codec, errorHandler);
+      container.start();
+      Thread.sleep(150);
+
+      sendRawPayload(
+          publisher,
+          codec,
+          "orders.created",
+          OrderCreated.class,
+          "not-json".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      assertThat(await(failedTopic)).isEqualTo("orders.created");
+      assertThat(container.isRunning()).isTrue();
+
+      send(publisher, codec, serializer, "orders.created", new OrderCreated("order-2"));
+      assertThat(await(listenerBean.received)).isEqualTo(new OrderCreated("order-2"));
+      container.stop();
+    }
+  }
+
+  @Test
+  void startWithoutSubscriberEndpointOrListenersRemainsStopped() {
+    ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    FluxMqProperties properties = new FluxMqProperties();
+
+    try (ZContext context = new ZContext()) {
+      ZmqFluxMqSubscriberContainer container =
+          new ZmqFluxMqSubscriberContainer(
+              context,
+              properties,
+              new FluxMqListenerRegistry(),
+              new JacksonFluxMqSerializer(objectMapper),
+              new FluxMqEnvelopeCodec(objectMapper),
+              (error, envelope) -> {});
+
+      container.start();
+
+      assertThat(container.isRunning()).isFalse();
+    }
+  }
+
   private static FluxMqListenerRegistry registryFor(Object bean, String methodName)
       throws ReflectiveOperationException {
     Method method = bean.getClass().getMethod(methodName, OrderCreated.class);
@@ -119,6 +191,25 @@ final class ZmqFluxMqSubscriberContainerIntegrationTest {
             "event-1",
             topic,
             OrderCreated.class.getName(),
+            Instant.parse("2026-01-01T00:00:00Z"),
+            FluxMqHeaders.empty(),
+            payloadBytes);
+    publisher.sendMore(topic);
+    publisher.sendMore(codec.encodeMetadata(envelope));
+    publisher.send(payloadBytes);
+  }
+
+  private static void sendRawPayload(
+      ZMQ.Socket publisher,
+      FluxMqEnvelopeCodec codec,
+      String topic,
+      Class<?> payloadType,
+      byte[] payloadBytes) {
+    FluxMqEnvelope envelope =
+        new FluxMqEnvelope(
+            "event-1",
+            topic,
+            payloadType.getName(),
             Instant.parse("2026-01-01T00:00:00Z"),
             FluxMqHeaders.empty(),
             payloadBytes);

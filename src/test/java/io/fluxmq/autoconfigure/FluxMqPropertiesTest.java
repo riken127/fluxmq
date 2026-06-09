@@ -57,6 +57,15 @@ final class FluxMqPropertiesTest {
   }
 
   @Test
+  void rejectsNegativePublisherEnqueueTimeout() {
+    FluxMqProperties properties = new FluxMqProperties();
+
+    assertThatThrownBy(() -> properties.getPublisher().setEnqueueTimeout(Duration.ofMillis(-1)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("fluxmq.publisher.enqueue-timeout must not be negative");
+  }
+
+  @Test
   void rejectsInvalidRetryAttempts() {
     FluxMqProperties properties = new FluxMqProperties();
 
