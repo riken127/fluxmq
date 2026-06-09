@@ -1,0 +1,17 @@
+fluxmq:
+  enabled: true
+  publisher:
+    bind: tcp://*:5556
+    queue-capacity: 1024
+    enqueue-timeout: 5s
+  subscriber:
+    connect: tcp://localhost:5556
+    topics:
+      - orders.created
+  shutdown:
+    timeout: 5s
+  serialization:
+    format: json
+  retry:
+    max-attempts: 1
+    delay: 0s
