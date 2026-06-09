@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: Verify library
+        run: ./mvnw --batch-mode verify spotless:check
+
+      - name: Install library locally for examples
+        run: ./mvnw --batch-mode install -DskipTests
+
+      - name: Verify basic pub/sub example
+        run: mvn --batch-mode -f examples/basic-pubsub/pom.xml package
