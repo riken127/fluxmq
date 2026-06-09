@@ -11,6 +11,9 @@ waiting for the next message or reading current state elsewhere?" If yes, FluxMQ
 See [Production Readiness](production-readiness.md) for lifecycle, observability, backpressure, and
 recovery guidance before using these patterns in production.
 
+For a runnable end-to-end example, see
+[`examples/cache-invalidation`](../examples/cache-invalidation).
+
 ## Production Fit Criteria
 
 FluxMQ is a strong candidate when:

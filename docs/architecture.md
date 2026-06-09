@@ -69,6 +69,15 @@ Why existing stack was insufficient: manually bootstrapping Boot conditions is b
 Why this dependency is lightweight enough: test-only and avoids full application startup.  
 Alternatives rejected: `spring-boot-starter-test` because it pulls in Mockito and broader extras.
 
+Dependency: Spring Boot test in examples  
+Scope: example test  
+Problem solved: validates example applications with real Spring Boot contexts.  
+Why existing stack was insufficient: example tests need to prove the documented auto-configuration
+and listener flow work end to end.  
+Why this dependency is lightweight enough: example-only test dependency; examples avoid
+`spring-boot-starter-test` and use explicit JUnit and AssertJ dependencies.  
+Alternatives rejected: untested examples, broad `spring-boot-starter-test`.
+
 Dependency: Spotless and Google Java Format  
 Scope: build  
 Problem solved: deterministic Java formatting.  

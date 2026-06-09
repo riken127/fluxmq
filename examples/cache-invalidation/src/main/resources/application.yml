@@ -1,0 +1,23 @@
+spring:
+  main:
+    web-application-type: none
+
+fluxmq:
+  enabled: true
+  publisher:
+    bind: inproc://cache-invalidation-example
+    queue-capacity: 256
+    enqueue-timeout: 1s
+  subscriber:
+    connect: inproc://cache-invalidation-example
+  shutdown:
+    timeout: 2s
+  serialization:
+    format: json
+  retry:
+    max-attempts: 2
+    delay: 50ms
+
+example:
+  cache-invalidation:
+    run-on-startup: true

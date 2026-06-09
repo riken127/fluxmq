@@ -121,6 +121,9 @@ subscriber startup, slow subscriber, and burst scenarios.
 
 ## Concrete Production Pattern: Cache Invalidation
 
+The runnable version of this pattern lives in
+[`examples/cache-invalidation`](../examples/cache-invalidation).
+
 ```java
 public final class ProductTopics {
   public static final FluxMqTopic<ProductChanged> PRODUCT_CHANGED =

@@ -1,4 +1,4 @@
-.PHONY: format format-check lint test verify
+.PHONY: format format-check lint test verify verify-examples
 
 format:
 	./mvnw spotless:apply
@@ -14,3 +14,8 @@ test:
 
 verify:
 	./mvnw verify spotless:check
+
+verify-examples:
+	./mvnw install -DskipTests
+	mvn -f examples/basic-pubsub/pom.xml test
+	mvn -f examples/cache-invalidation/pom.xml test

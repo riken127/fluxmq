@@ -157,8 +157,10 @@ Design handlers to be idempotent when publishing meaningful business events.
 - Live dashboards, status streams, and edge telemetry where gaps are acceptable.
 - Lightweight service-to-service notifications inside trusted networks.
 
-See [FluxMQ Use Cases](docs/use-cases.md) for concrete scenarios and
-[Production Readiness](docs/production-readiness.md) for operational guidance.
+See [FluxMQ Use Cases](docs/use-cases.md) for concrete scenarios,
+[Production Readiness](docs/production-readiness.md) for operational guidance, and
+[`examples/cache-invalidation`](examples/cache-invalidation) for an end-to-end production-style
+example.
 
 ## Non-Recommended Use Cases
 
@@ -175,9 +177,11 @@ make format-check
 make lint
 make test
 make verify
+make verify-examples
 ```
 
 Fast tests are named `*Test`. In-process JeroMQ integration tests are named `*IntegrationTest` and
-run during `make verify`.
+run during `make verify`. Example applications are checked by `make verify-examples`.
 
-See `examples/basic-pubsub` for a minimal Spring Boot application.
+See `examples/basic-pubsub` for a minimal Spring Boot application and
+`examples/cache-invalidation` for an end-to-end cache invalidation pattern.
